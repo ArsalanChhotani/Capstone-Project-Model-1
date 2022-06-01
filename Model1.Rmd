@@ -1,0 +1,320 @@
+---
+title: "Model1"
+author: "Arsalan Chhotani"
+date: "4/24/2022"
+output: html_document
+---
+
+# Classifying Paper against (Not Cash) Digital & Cards
+```{r setup, include=TRUE}
+knitr::opts_chunk$set(echo = TRUE)
+library(caTools)
+library(randomForest)
+library(tidyverse)
+library(readr)
+library(dplyr)
+library(nnet)
+library(caret)
+library(rpart)
+library(rpart.plot)
+library(party)
+library(partykit)
+library(mfx)
+library(censReg)
+library(carData)
+library(zoo)
+library(sandwich)
+library(ggplot2)
+library(gridExtra)
+library(lmtest)
+library(readxl)
+library(car)
+library(lattice)
+library(survival)
+library(Formula)
+library(nortest)
+library(AER)
+library(broom)
+library(xtable)
+library(knitr)
+library(tidyr)
+library(stargazer)
+library(systemfit)
+
+```
+
+
+
+
+
+
+
+
+```{r}
+df_original <- readr::read_csv("Data2.csv")
+
+head(df_original)
+
+colnames(df)
+
+head(df)
+dim(df)
+
+colnames(df_original)
+df <- dplyr::select(df_original,pi_p2p_tree,year,id,date,work_cat,age_sq,amnt,in_person,race_cat,merch,census_division,highest_education_cat,marital_status,other_assets,device,end_cash_bal_range,dc_logo_1,e_exp_cover,dc_rewards_1,paypref_50to100,gender,shops_online,hh_size,income_hh,bill)
+
+df <- filter(df, device != 8)
+
+#df<-na.omit(df)
+
+#df2 <- dplyr::select(df_original,pi_p2p_tree,year,id,date,work_cat,age_sq,amnt,in_person,race_cat,merch,census_division,highest_education_cat,shops_online,marital_status,gender,bill,other_debts,other_assets,device,interest_level,hh_size,end_cash_bal_range)
+
+
+#df<-na.omit(df)
+
+df <- subset(df, select = -c(id,date))
+
+#df_cards_paper <- df[!(df$pi_p2p_tree=="Digital"),]
+#unique(df_cards_paper$pi_p2p_tree)
+
+df_cards_paper <- df
+#df_cards_paper <- filter(df, pi_p2p_tree == "Cards" | pi_p2p_tree == "Paper")
+unique(df_cards_paper$pi_p2p_tree)
+
+
+
+dim(df_cards_paper)
+head(df_cards_paper)
+
+#df_cards_paper$amnt <- log(df_cards_paper$amnt)
+#df_cards_paper$income_hh <- log(df_cards_paper$income_hh)
+#df_cards_paper$other_debts <- log(df_cards_paper$other_debts)
+df_cards_paper$pi_p2p_tree = as.factor(df_cards_paper$pi_p2p_tree)
+df_cards_paper$work_cat = as.factor(df_cards_paper$work_cat)
+df_cards_paper$merch = as.factor(df_cards_paper$merch)
+df_cards_paper$race_cat = as.factor(df_cards_paper$race_cat)
+df_cards_paper$race_cat <- relevel(df_cards_paper$race_cat, "1. White")
+df_cards_paper$end_cash_bal_range= as.factor(df_cards_paper$end_cash_bal_range)
+df$hh_size <- as.factor(df$hh_size)
+#df_cards_paper$merch_combined = as.factor(df_cards_paper$merch_combined)
+#df_cards_paper$highest_education = as.factor(df_cards_paper$highest_education)
+df_cards_paper$highest_education_cat = as.factor(df_cards_paper$highest_education_cat)
+df_cards_paper$highest_education_cat <- relevel(df_cards_paper$highest_education_cat, "High_School_or_Lower")
+df_cards_paper$census_division = as.factor(df_cards_paper$census_division)
+df_cards_paper$marital_status = as.factor(df_cards_paper$marital_status)
+df_cards_paper$marital_status <- relevel(df_cards_paper$marital_status, "6")
+df_cards_paper$end_cash_bal_range = as.factor(df_cards_paper$end_cash_bal_range)
+#df_cards_paper$tran = as.factor(df_cards_paper$tran)
+df_cards_paper$paypref_50to100 = as.factor(df_cards_paper$paypref_50to100)
+#df_cards_paper$paypref_web = as.factor(df_cards_paper$paypref_web)
+
+df_cards_paper$in_person = as.factor(df_cards_paper$in_person)
+df_cards_paper$device = as.factor(df_cards_paper$device)
+df_cards_paper$dc_logo_1 = as.factor(df_cards_paper$dc_logo_1)
+df_cards_paper$dc_rewards_1 = as.factor(df_cards_paper$dc_rewards_1)
+#df_cards_paper$paypref_lt10 = as.factor(df_cards_paper$paypref_lt10)
+df_cards_paper$gender = as.factor(df_cards_paper$gender)
+df_cards_paper$shops_online = as.factor(df_cards_paper$shops_online)
+df_cards_paper$bill = as.factor(df_cards_paper$bill)
+
+
+
+
+```
+```{r}
+df_cards_paper$pi_p2p_tree <- ifelse(df_cards_paper$pi_p2p_tree == "Paper", 1 ,0)
+#df_cards_paper$pi_p2p_tree = as.factor(df_cards_paper$pi_p2p_tree)
+table(df_cards_paper$pi_p2p_tree)
+prop.table(table(df_cards_paper$pi_p2p_tree))
+library(ROSE)
+df_cards_paper <- ovun.sample(pi_p2p_tree~.,data = df_cards_paper, method = "both", p=0.5)$data
+#table(over)
+
+#dim(over)
+
+
+barplot(prop.table(table(df_cards_paper$pi_p2p_tree)),
+        col = rainbow(2),
+        ylim = c(0, 0.7),
+        main = "Class Distribution")
+
+str(df_cards_paper)
+
+```
+
+
+```{r}
+df_cards_paper<-fastDummies::dummy_cols(df_cards_paper,select_columns=c("work_cat","census_division","marital_status_cat","end_cash_bal_range","merch","race_cat","highest_education_cat","tran","paypref_50to100","paypref_web","paypref_lt10","device"),remove_selected_columns = T, remove_first_dummy = T)
+
+head(df_cards_paper)
+
+
+
+unique(df_cards_paper$pi_p2p_tree)
+
+
+unique(df_cards_paper$pi_p2p_tree)
+head(df_cards_paper)
+
+#df_cards_paper <- subset(df_cards_paper, select = -c(`race_cat_4. Other`))
+
+df2018 <- filter(df_cards_paper, year == 2018)
+
+df2019 <- filter(df_cards_paper, year == 2019)
+
+df2020 <- filter(df_cards_paper, year == 2020)
+
+#df2018 <- subset(df2018, select = -c(year))
+#df2019 <- subset(df2019, select = -c(year))
+#df2020 <- subset(df2020, select = -c(year))
+
+
+
+df2018 <- as.data.frame(df2018)
+df2019 <- as.data.frame(df2019)
+df2020 <- as.data.frame(df2020)
+
+
+
+
+dim(df2018)
+dim(df2019)
+dim(df2020)
+#Perfection
+
+
+#partition 2018
+
+set.seed(2)
+train.index18 <- sample(c(1:dim(df2018)[1]), dim(df2018)[1]*0.6)
+train.df18 <- df2018[train.index18, ]
+valid.df18 <- df2018[-train.index18, ]
+
+
+#partition 2019
+
+set.seed(7)
+train.index19 <- sample(c(1:dim(df2019)[1]), dim(df2019)[1]*0.6)
+train.df19 <- df2019[train.index19, ]
+valid.df19 <- df2019[-train.index19, ]
+
+#partition 2020
+
+set.seed(5)
+train.index20 <- sample(c(1:dim(df2020)[1]), dim(df2020)[1]*0.6)
+train.df20 <- df2020[train.index20, ]
+valid.df20 <- df2020[-train.index20, ]
+
+
+
+
+
+#merging all three datasets
+#training
+
+train.index <- rbind(train.index18,train.index19,train.index20)
+train.df <- rbind(train.df18,train.df19,train.df20)
+valid.df <- rbind(valid.df18,valid.df19,valid.df20)
+
+
+```
+
+```{r}
+#colnames(df_original)
+
+colnames(train.df)
+t1.logit.reg <- glm(pi_p2p_tree ~ ., data = train.df, family = binomial (link = "logit"))
+options(scipen=999)
+summary(t1.logit.reg)
+#names(train.df)
+```
+
+```{r}
+round(data.frame(summary(t1.logit.reg)$coefficients, odds = exp(coef(t1.logit.reg))),5)
+
+```
+
+
+
+
+```{r}
+
+
+t1.logit.reg.pred <- predict(t1.logit.reg, valid.df, type = "response")
+data.frame(actual = valid.df$pi_p2p_tree[1:5], predicted = t1.logit.reg.pred[1:5])
+
+#class(t1.logit.reg.pred)
+
+t1.logit.reg.pred2<-ifelse(t1.logit.reg.pred>0.55, 1 ,0)
+confusionMatrix(as.factor(t1.logit.reg.pred2), as.factor(valid.df$pi_p2p_tree),positive='1')
+```
+
+
+```{r}
+library(gains)
+dim(valid.df)
+length(t1.logit.reg.pred)
+
+
+gain <- gains(valid.df$pi_p2p_tree, t1.logit.reg.pred, groups=10)
+# plot lift chart
+plot(c(0,gain$cume.pct.of.total*sum(valid.df$pi_p2p_tree))~c(0,gain$cume.obs),
+xlab="# cases", ylab="Cumulative", main="", type="l")
+lines(c(0,sum(valid.df$pi_p2p_tree))~c(0, dim(valid.df)[1]), lty=2)
+
+```
+
+```{r}
+
+
+# compute deciles and plot decile-wise chart
+heights <- gain$mean.resp/mean( valid.df$pi_p2p_tree)
+midpoints <- barplot(heights, names.arg = gain$depth, ylim = c(0, 3),
+                     xlab = "Percentile", ylab = "Mean Response", main = "Decile-wise lift chart")
+# add labels to columns
+text(midpoints, heights+0.5, labels=round(heights, 1), cex = 0.8)
+
+
+
+```
+```{r}
+library(stats)
+AIC(t1.logit.reg)
+
+
+```
+
+
+```{r}
+#Normalization
+normalize <- function(x) {
+return ((x - min(x)) / (max(x) - min(x))) }
+
+```
+
+
+````{r}
+set.seed(120)  # Setting seed
+classifier_RF = randomForest(x = train.df[-1],
+                             y = train.df$pi_p2p_tree,
+                             ntree = 10)
+  
+classifier_RF
+
+y_pred = predict(classifier_RF, newdata = valid.df[-1])
+  
+# Confusion Matrix
+confusion_mtx = table(valid.df[, 1], y_pred)
+confusion_mtx
+  
+# Plotting model
+plot(classifier_RF)
+  
+# Importance plot
+importance(classifier_RF)
+  
+# Variable importance plot
+varImpPlot(classifier_RF)
+
+
+```
